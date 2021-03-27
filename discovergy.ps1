@@ -1,4 +1,4 @@
-$endpointUri="https://api.discovergy.com/public/v1"
+$DiscovergyUri = "https://api.discovergy.com/public/v1"
 
 # Oauth1
 
@@ -11,244 +11,393 @@ $endpointUri="https://api.discovergy.com/public/v1"
 #      => Invoke-PSAuthRestMethod: Execute Invoke-RestMethod including an OAuth 1.0 authorization header.
 
 $discovergyuser = 'your@email.com'
-$discovergypass = 'yourP@ssw0rd'
+$discovergypass = 'YourP@ssW0rd'
 
+# OAuth1 Step 1
+function Get-DiscovergyOauth1ConsumerToken {
 
-write-host "Get Consumer Token..." -ForeGroundColor GREEN
+	param (
+		$endpointUri
+	)
 
-$Params = @{
-	"URI" = "$endpointUri/oauth1/consumer_token"
-	"Method" = 'POST'
-	"Headers" = @{
-		"accept" = "application/json"
-		"Content-Type" = "application/x-www-form-urlencoded"
+	Write-Verbose "OAuth1 Step 1: Get Consumer Token..."
+
+	$consumertoken = @{}
+
+	$RestParams = @{
+		"URI" = "$endpointUri/oauth1/consumer_token"
+		"Method" = 'POST'
+		"Headers" = @{
+			"accept" = "application/json"
+			"Content-Type" = "application/x-www-form-urlencoded"
+		}
 	}
-}
-$Body = @{
-	"client" = "MyPowershellScript"
-}
-$consumertoken = Invoke-RestMethod @Params -Body $body
-
-$consumertokenkey = $consumertoken.key
-$consumertokensecret = $consumertoken.secret
-
-write-host "oauth_consumer_key=$consumertokenkey"
-write-host "oauth_consumer_secret=$consumertokensecret"
-#$consumertoken
-
-write-host "Get Request Token..." -ForeGroundColor GREEN
-
-$Method = 'POST'
-$Uri = "$endpointUri/oauth1/request_token"
-$ConsumerSecret = ConvertTo-SecureString $consumertokensecret -AsPlainText -Force
-#$ExtraParams = @{
-#	"oauth_callback" = "oob"
-#}
-#$authstring = Get-PSAuthorizationString -uri $Uri -OauthParameters $ExtraParams -OauthConsumerKey $consumertokenkey -OauthConsumerSecret $ConsumerSecret -OauthSignatureMethod HMAC-SHA1 -Method $Method
-#$authstring += ',oauth_callback="oob"'
-#$authstringescape = [System.Uri]::EscapeDataString($authstring)
-#$authstringescape = ConvertTo-PSUrl
-#$Params = @{
-#	"URI" = "$Uri"
-#	"Method" = $Method
-#	"Headers" = @{
-#		"accept" = "text/plain"
-#		"Authorization" = "$authstring"
-#	}
-#}
-$requesttoken = Invoke-PSAuthRestMethod -uri $Uri -OauthConsumerKey $consumertokenkey -OauthConsumerSecret $ConsumerSecret -OauthSignatureMethod HMAC-SHA1 -Method $Method
-
-#$requesttoken
-
-$token = $requesttoken.split("&")
-
-#$token
-
-$oauthtoken=$token[0].Split("=")[1]
-$oauthtokensecret=$token[1].Split("=")[1]
-
-write-host "oauth_token=$oauthtoken"
-write-host "oauth_token_secret=$oauthtokensecret"
-
-write-host "Authorize..." -ForeGroundColor GREEN
-$Method = 'GET'
-$email = [uri]::EscapeDataString($discovergyuser)
-$pass = [uri]::EscapeDataString($discovergypass)
-$Uri = "$endpointUri/oauth1/authorize?oauth_token=$oauthtoken&email=$email&password=$pass"
-$Params = @{
-	"URI" = "$Uri"
-	"Method" = $Method
-	"Headers" = @{
-		"accept" = "application/x-www-form-urlencoded"
+	$RestBody = @{
+		"client" = "MyPowershellScript"
 	}
+	$return = Invoke-RestMethod @RestParams -Body $RestBody
+	
+	$consumertoken.Key = $return.key
+	$consumertoken.Secret = $return.secret
+
+	Write-Verbose "Output OAuth Consumer Key: $($consumertoken.Key)"
+	Write-Verbose "Output OAuth Consumer Secret: $($consumertoken.Secret)"
+
+	return $consumertoken
 }
-$oauth_verifier = Invoke-RestMethod @Params
 
-$oauth_verifier = $oauth_verifier.Split("=")[1]
+# OAuth1 Step 2
+function Get-DiscovergyOauth1RequestToken {
 
-write-host "oauth_verifier=$oauth_verifier"
+	param (
+		$endpointUri,
+		$consumerkey,
+		$consumersecret
+	)
 
-write-host "Access Token..." -ForeGroundColor GREEN
-$Method = 'POST'
-$Uri = "$endpointUri/oauth1/access_token"
-$ExtraParams = @{
-	"oauth_verifier" = "$oauth_verifier"
+	Write-Verbose "OAuth1 Step 2: Get Request Token..."
+	
+	#$requesttoken = "" | Select-Object -Property Key,Secret
+	$requesttoken = @{}
+
+	Write-Verbose "Input Uri: $endpointUri"
+	Write-Verbose "Input Consumer Key: $consumerkey"
+	Write-Verbose "Input Consumer Secret: $consumersecret"
+
+	$Method = 'POST'
+	$Uri = "$endpointUri/oauth1/request_token"
+	$consumersecretsecure = ConvertTo-SecureString $consumersecret -AsPlainText -Force
+
+	$return = Invoke-PSAuthRestMethod -uri $Uri -OauthConsumerKey $consumerkey -OauthConsumerSecret $consumersecretsecure -OauthSignatureMethod HMAC-SHA1 -Method $Method
+	
+	#$return
+	
+	$token = $return.split("&")
+	
+	#$token
+	
+	$oauthtoken=$token[0].Split("=")[1]
+	$oauthtokensecret=$token[1].Split("=")[1]
+	
+	$requesttoken.Key = $oauthtoken
+	$requesttoken.Secret = $oauthtokensecret
+
+	Write-Verbose "Output OAuth Token Key: $($requesttoken.Key)"
+	Write-Verbose "Output OAuth Token Secret: $($requesttoken.Secret)"
+
+	return $requesttoken
 }
-$helper = Get-PSAuthorizationString -Uri $Uri -Method $Method `
-	-OauthConsumerKey $consumertokenkey `
-	-OauthConsumerSecret $ConsumerSecret `
-	-OauthAccessToken $oauthtoken `
-	-OauthAccessTokenSecret (ConvertTo-SecureString $oauthtokensecret -AsPlainText -Force ) `
-	-OauthParameters $ExtraParams `
-	-OauthSignatureMethod HMAC-SHA1
-$helper += ",oauth_verifier=""$oauth_verifier"""
 
-#$helper
+# OAuth1 Step 3
+function Get-DiscovergyOauth1Authorization {
 
-$Params = @{
-	"URI" = "$Uri"
-	"Method" = $Method
-	"Headers" = @{
-		"accept" = "application/x-www-form-urlencoded"
-		"Authorization" = "$helper"
+	param (
+		$endpointUri,
+		$oauthtokenkey,
+		$email,
+		$pass
+	)
+
+	Write-Verbose "OAuth1 Step 3: Get Authorization..."
+
+	Write-Verbose "Input Uri: $endpointUri"
+	Write-Verbose "Input OAuth Token Key: $oauthtokenkey"
+	Write-Verbose "Input User: $email"
+	Write-Verbose "Input Pass: $pass"
+
+	$Method = 'GET'
+	$emailescaped = [uri]::EscapeDataString($email)
+	$passescaped = [uri]::EscapeDataString($pass)
+	$Uri = "$endpointUri/oauth1/authorize?oauth_token=$oauthtokenkey&email=$emailescaped&password=$passescaped"
+	$RestParams = @{
+		"URI" = "$Uri"
+		"Method" = $Method
+		"Headers" = @{
+			"accept" = "application/x-www-form-urlencoded"
+		}
 	}
+	$return = Invoke-RestMethod @RestParams
+	
+	$oauthverifier = $return.Split("=")[1]
+	
+	Write-Verbose "Output OAuth Verifier: $oauthverifier"
+	
+	return $oauthverifier
 }
-$oauth_final = Invoke-RestMethod @Params
 
-$my_oauth_token = $oauth_final.Split("&")[0].Split("=")[1]
-$my_oauth_token_secret = $oauth_final.Split("&")[1].Split("=")[1]
+# OAuth1 Step 4
+function Get-DiscovergyOauth1AccessToken {
 
-write-host "oauth_token=$my_oauth_token"
-write-host "oauth_token_secret=$my_oauth_token_secret"
+	param (
+		$endpointUri,
+		$consumerkey,
+		$consumersecret,
+		$oauthtokenkey,
+		$oauthtokensecret,
+		$oauthverifier
+	)
 
-##########
+	Write-Verbose "OAuth1 Step 4: Get Access Token..."
 
-write-host "Get available meters..." -ForeGroundColor GREEN
-$Method = 'GET'
-$Uri = "$endpointUri/meters"
+	Write-Verbose "Input Uri: $endpointUri"
+	Write-Verbose "Input Consumer Key: $consumerkey"
+	Write-Verbose "Input Consumer Secret: $consumersecret"
+	Write-Verbose "Input OAuth Token Key: $oauthtokenkey"
+	Write-Verbose "Input OAuth Token Secret: $oauthtokensecret"
+	Write-Verbose "Input OAuth Verifier: $oauthverifier"
 
-$Params = @{
-	"URI" = "$Uri"
-	"Method" = $Method
-	"Headers" = @{
-		"accept" = "application/json"
+
+	$accesstoken = @{}
+
+
+	$Method = 'POST'
+	$Uri = "$endpointUri/oauth1/access_token"
+	$ExtraParams = @{
+		"oauth_verifier" = "$oauthverifier"
 	}
-}
-$meters = Invoke-PSAuthRestMethod @Params `
-	-OauthConsumerKey $consumertokenkey `
-	-OauthConsumerSecret $ConsumerSecret `
-	-OauthSignatureMethod HMAC-SHA1 `
-	-OauthAccessToken $my_oauth_token `
-	-OauthAccessTokenSecret (ConvertTo-SecureString $my_oauth_token_secret -AsPlainText -Force ) 
-
-
-#$meters
-$mymeter = $meters.meterId
-
-write-host "Meter ID: $mymeter"
-
-
-write-host "Get field names..." -ForeGroundColor GREEN
-$Method = 'GET'
-$Uri = "$endpointUri/field_names?meterId=$mymeter"
-
-$Params = @{
-	"URI" = "$Uri"
-	"Method" = $Method
-	"Headers" = @{
-		"accept" = "application/json"
+	$helper = Get-PSAuthorizationString -Uri $Uri -Method $Method `
+		-OauthConsumerKey $consumerkey `
+		-OauthConsumerSecret (ConvertTo-SecureString $consumersecret -AsPlainText -Force ) `
+		-OauthAccessToken $oauthtokenkey `
+		-OauthAccessTokenSecret (ConvertTo-SecureString $oauthtokensecret -AsPlainText -Force ) `
+		-OauthParameters $ExtraParams `
+		-OauthSignatureMethod HMAC-SHA1
+	# OAuth Verifier will be included in Signature by using above OauthParameters, but
+	# unfortunately missed in output string. Therefore it will be added here as well.
+	$helper += ",oauth_verifier=""$oauthverifier"""
+	
+	#$helper
+	
+	$RestParams = @{
+		"URI" = "$Uri"
+		"Method" = $Method
+		"Headers" = @{
+			"accept" = "application/x-www-form-urlencoded"
+			"Authorization" = "$helper"
+		}
 	}
+	$return = Invoke-RestMethod @RestParams
+	
+	$accesstoken.Key = $return.Split("&")[0].Split("=")[1]
+	$accesstoken.Secret = $return.Split("&")[1].Split("=")[1]
+	
+	Write-Verbose "Output OAuth Access Token Key: $($accesstoken.Key)"
+	Write-Verbose "Output OAuth Access Token Secret: $($accesstoken.Secret)"
+
+	return $accesstoken
 }
-$fieldnames = Invoke-PSAuthRestMethod @Params `
-	-OauthConsumerKey $consumertokenkey `
-	-OauthConsumerSecret $ConsumerSecret `
-	-OauthSignatureMethod HMAC-SHA1 `
-	-OauthAccessToken $my_oauth_token `
-	-OauthAccessTokenSecret (ConvertTo-SecureString $my_oauth_token_secret -AsPlainText -Force ) 
 
-$fieldnames
-# Values seems to be in milli (milliwatt, millivolt, ...)
-#energy
-#energy1
-#energy2
-#energyOut
-#energyOut1
-#energyOut2
-#power
-#power1
-#power2
-#power3
-#voltage1
-#voltage2
-#voltage3
+function Get-DiscovergyMeters {
+
+	param (
+		$endpointUri,
+		$consumerkey,
+		$consumersecret,
+		$accesskey,
+		$accesssecret
+	)
+
+	Write-Verbose "Get available meters..."
+
+	Write-Verbose "Input Uri: $endpointUri"
+	Write-Verbose "Input Consumer Key: $consumerkey"
+	Write-Verbose "Input Consumer Secret: $consumersecret"
+	Write-Verbose "Input OAuth Token Key: $accesskey"
+	Write-Verbose "Input OAuth Token Secret: $accesssecret"
 
 
+	$Method = 'GET'
+	$Uri = "$endpointUri/meters"
 
-write-host "Get first data..." -ForeGroundColor GREEN
-$Method = 'GET'
-# in opposite to Awattar the API time values fit to GMT+1 time zone. No correction required.
-# Begin time of interval to return readings for, as a UNIX millisecond timestamp
-$unixstart = get-date -date "01/01/1970"
-$start = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date "01/02/2021 00:00:00")).TotalMilliseconds
-$ende = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date "28/02/2021 23:00:00")).TotalMilliseconds
-$resolution = 'one_hour'
-$field = 'power'
-# Power = Milliwatt
-# 
-# resolution	maximum time span (to - from)
-# raw				1 day
-# three_minutes		10 days
-# fifteen_minutes	31 days
-# one_hour			93 days
-# one_day			10 years
-# one_week			20 years
-# one_month			50 years
-# one_year			100 years
-$Uri = "$endpointUri/readings?meterId=$mymeter&fields=$field&from=$start&to=$ende&resolution=$resolution&disaggregation=false&each=false"
-
-$Params = @{
-	"URI" = "$Uri"
-	"Method" = $Method
-	"Headers" = @{
-		"accept" = "application/json"
+	$RestParams = @{
+		"URI" = "$Uri"
+		"Method" = $Method
+		"Headers" = @{
+			"accept" = "application/json"
+		}
 	}
-}
-$data = Invoke-PSAuthRestMethod @Params `
-	-OauthConsumerKey $consumertokenkey `
-	-OauthConsumerSecret $ConsumerSecret `
-	-OauthSignatureMethod HMAC-SHA1 `
-	-OauthAccessToken $my_oauth_token `
-	-OauthAccessTokenSecret (ConvertTo-SecureString $my_oauth_token_secret -AsPlainText -Force ) 
+	$return = Invoke-PSAuthRestMethod @RestParams `
+		-OauthConsumerKey $consumerkey `
+		-OauthConsumerSecret (ConvertTo-SecureString $consumersecret -AsPlainText -Force ) `
+		-OauthSignatureMethod HMAC-SHA1 `
+		-OauthAccessToken $accesskey `
+		-OauthAccessTokenSecret (ConvertTo-SecureString $accesssecret -AsPlainText -Force ) 
 
-#$data
 
-$summary = 0
+	#$meters
+	$mymeter = $return.meterId
 
-foreach ($entry in $data) {
-	$zeit = $unixstart.AddMilliseconds($entry.time)
-	$value = $entry.values.$field / 1000
-	$summary += $value
-	write-host ("Zeitbereich {0}: {1} {2:n1}" -f $zeit,$field,$value)
+	Write-Verbose "Output Meter ID: $mymeter"
+
+	return $mymeter
 }
 
-write-host ("Sum {0} {1:n0}" -f $field, $summary) -ForeGroundColor GREEN
-write-host "Note: power = Wh"
 
-write-host "Export data..." -ForeGroundColor GREEN
+function Get-DiscovergyFieldNames {
 
-$exdata = @()
+	param (
+		$endpointUri,
+		$consumerkey,
+		$consumersecret,
+		$accesskey,
+		$accesssecret,
+		$meterid
+	)
 
-foreach ($entry in $data) {
-	$zeit = $unixstart.AddMilliseconds($entry.time)
-	$zeitstr = ("{0}" -f $zeit)
-	$value = $entry.values.$field / 1000
-	$exdata += [PSCustomObject]@{
-		'Zeitbereich' = $zeitstr
-		'Verbrauch Wh' = $value
+	Write-Verbose "Get field names..."
+
+	Write-Verbose "Input Uri: $endpointUri"
+	Write-Verbose "Input Consumer Key: $consumerkey"
+	Write-Verbose "Input Consumer Secret: $consumersecret"
+	Write-Verbose "Input OAuth Token Key: $accesskey"
+	Write-Verbose "Input OAuth Token Secret: $accesssecret"
+	Write-Verbose "Meter ID: $meterid"
+
+	$Method = 'GET'
+	$Uri = "$endpointUri/field_names?meterId=$meterid"
+
+	$RestParams = @{
+		"URI" = "$Uri"
+		"Method" = $Method
+		"Headers" = @{
+			"accept" = "application/json"
+		}
 	}
+	$return = Invoke-PSAuthRestMethod @RestParams `
+		-OauthConsumerKey $consumerkey `
+		-OauthConsumerSecret (ConvertTo-SecureString $consumersecret -AsPlainText -Force ) `
+		-OauthSignatureMethod HMAC-SHA1 `
+		-OauthAccessToken $accesskey `
+		-OauthAccessTokenSecret (ConvertTo-SecureString $accesssecret -AsPlainText -Force ) 
+
+	$fieldnames = $return
+
+	Write-Verbose ( $fieldnames | Out-String)
+	# Values seems to be in milli (milliwatt, millivolt, ...)
+	#energy
+	#energy1
+	#energy2
+	#energyOut
+	#energyOut1
+	#energyOut2
+	#power
+	#power1
+	#power2
+	#power3
+	#voltage1
+	#voltage2
+	#voltage3
+
+	return $fieldnames
 }
 
-$exdata
+function Get-DiscovergyHourlyPowerData {
 
-$exdata | export-csv -path '.\discovergy-data.csv'
+	param (
+		$endpointUri,
+		$consumerkey,
+		$consumersecret,
+		$accesskey,
+		$accesssecret,
+		$meterid,
+		$starttimestr,
+		$endtimestr
+	)
+
+	Write-Verbose "Get hourly power data..."
+
+	Write-Verbose "Input Uri: $endpointUri"
+	Write-Verbose "Input Consumer Key: $consumerkey"
+	Write-Verbose "Input Consumer Secret: $consumersecret"
+	Write-Verbose "Input OAuth Token Key: $accesskey"
+	Write-Verbose "Input OAuth Token Secret: $accesssecret"
+	Write-Verbose "Meter ID: $meterid"
+	Write-Verbose "Sart date/time: $starttimestr"
+	Write-Verbose "End date/time: $endtimestr"
+
+	$Method = 'GET'
+	# In opposite to Awattar the API time values fit to GMT+1 time zone. No correction required.
+	# Begin time of interval to return readings for, as a UNIX millisecond timestamp
+	$unixstart = get-date -date "01/01/1970"
+	$start = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $starttimestr)).TotalMilliseconds
+	$ende = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $endtimestr)).TotalMilliseconds
+	$resolution = 'one_hour'
+	# Power = Milliwatt
+	$field = 'power'
+
+	# resolution	maximum time span (to - from)
+	# raw				1 day
+	# three_minutes		10 days
+	# fifteen_minutes	31 days
+	# one_hour			93 days
+	# one_day			10 years
+	# one_week			20 years
+	# one_month			50 years
+	# one_year			100 years
+	$maxrange = 93
+	$range = (New-TimeSpan -Start (Get-Date $starttimestr) -End (Get-Date $endtimestr)).TotalDays
+	Write-Verbose "Selected time range is $range days. API limit is $maxrange"
+	if ($range -gt $maxrange) {
+		Write-Error "Selected time range $range above API limit of $maxrange"
+	}
+
+	$Uri = "$endpointUri/readings?meterId=$meterid&fields=$field&from=$start&to=$ende&resolution=$resolution&disaggregation=false&each=false"
+
+	$RestParams = @{
+		"URI" = "$Uri"
+		"Method" = $Method
+		"Headers" = @{
+			"accept" = "application/json"
+		}
+	}
+	$return = Invoke-PSAuthRestMethod @RestParams `
+		-OauthConsumerKey $consumerkey `
+		-OauthConsumerSecret (ConvertTo-SecureString $consumersecret -AsPlainText -Force ) `
+		-OauthSignatureMethod HMAC-SHA1 `
+		-OauthAccessToken $accesskey `
+		-OauthAccessTokenSecret (ConvertTo-SecureString $accesssecret -AsPlainText -Force ) 
+
+
+	# Convert human readable
+	# Date/Time from unix to string
+	# Power from Milliwatt to Watt
+	$data = @()
+
+	foreach ($entry in $return) {
+		$datetime = $unixstart.AddMilliseconds($entry.time)
+		$datetimestr = ("{0}" -f $datetime)
+		$value = $entry.values.$field / 1000
+		$data += [PSCustomObject]@{
+			'Measure_Range_1h' = $datetimestr
+			'Power_used_Wh' = $value
+		}
+	}
+
+	return $data
+}
+
+
+
+#
+# Main
+#
+
+$VerbosePreference = "Continue"
+$ErrorActionPreference = "Stop"
+
+$consumertoken = Get-DiscovergyOauth1ConsumerToken $DiscovergyUri
+$requesttoken = Get-DiscovergyOauth1RequestToken $DiscovergyUri $consumertoken.key $consumertoken.secret
+$oauthverifier = Get-DiscovergyOauth1Authorization $DiscovergyUri $requesttoken.key $discovergyuser $discovergypass
+$accesstoken = Get-DiscovergyOauth1AccessToken $DiscovergyUri `
+		$consumertoken.key $consumertoken.secret $requesttoken.key $requesttoken.secret $oauthverifier
+
+$meterid = Get-DiscovergyMeters $DiscovergyUri $consumertoken.key $consumertoken.secret $accesstoken.key $accesstoken.secret
+
+#$fieldnames = Get-DiscovergyFieldNames $DiscovergyUri $consumertoken.key $consumertoken.secret $accesstoken.key $accesstoken.secret $meterid
+
+$start = "01/02/2021 00:00:00"
+$end = "28/02/2021 23:00:00"
+$powerdata = Get-DiscovergyHourlyPowerData $DiscovergyUri $consumertoken.key $consumertoken.secret $accesstoken.key $accesstoken.secret $meterid $start $end
+
+$powerdata | export-csv -path '.\discovergy-2021-02.csv'
 
