@@ -1,27 +1,36 @@
-$verbrauch = import-csv .\discovergy-2021-02.csv
-$kosten = Import-Csv .\awattar-2021-02.csv
+$yearmonth = '2021-01'
+$consumption = Import-Csv .\discovergy-$yearmonth.csv
+$marketdata = Import-Csv .\awattar-upd-$yearmonth.csv
+$consumptionheaderrange = 'Zeitbereich'
+$consumptionheaderusage = 'Verbrauch Wh'
+$marketdataheaderrange = 'Range_1h'
+$marketdataheaderprice = 'Total_Cost_ct_each_kWh'
+
+$VerbosePreference = "Continue"
+$ErrorActionPreference = "Stop"
 
 $exdata = @()
 
-for ( $i=0; $i -lt $verbrauch.count ; $i++) {
+for ( $i=0; $i -lt $consumption.count ; $i++) {
 	#write-host $i
-	if($verbrauch[$i].zeitbereich -ne $kosten[$i].zeitbereich){
-		write-host "Ungleich: Verbrauch={0} Kosten={1}" -f verbrauch[$i].zeitbereich,$kosten[$i].zeitbereich
-		exit
+	if($consumption[$i].$consumptionheaderrange -ne $marketdata[$i].$marketdataheaderrange){
+		Write-Error "Must be equal: Consumption={0} Marketdata={1}" -f $consumption[$i].$consumptionheaderrange,$marketdata[$i].$marketdataheaderrange
 	} else {
-		$powr = [decimal] ($verbrauch[$i].'Verbrauch Wh').Replace(",",".")
-		$price = [decimal] ($kosten[$i].'Preis ct/kWh').Replace(",",".")
+		$powr = [decimal] ($consumption[$i].$consumptionheaderusage).Replace(",",".")
+		$price = [decimal] ($marketdata[$i].$marketdataheaderprice).Replace(",",".")
+		# Convert from
 		# ct -> EUR (/100)
 		# Wh -> kWh (/1000)
 		$endprice = $powr * $price / 100 / 1000
 		#write-host "$powr  - $price  - $endprice"
+		Write-Verbose "Range: $($consumption[$i].$consumptionheaderrange)  Power: $powr  Price: $price  Endprice: $endprice"
 		$exdata += [PSCustomObject]@{
-			'Zeitbereich' = $verbrauch[$i].zeitbereich
-			'Kosten EUR' = $endprice
+			'Range_1h' = $consumption[$i].$consumptionheaderrange
+			'Cost_EUR' = $endprice
 		}
 	}
 }
 
-$exdata
+#$exdata
 
-$exdata | export-csv -path '.\merge-data.csv'
+$exdata | export-csv -path ".\merge-$yearmonth.csv"
