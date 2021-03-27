@@ -1,7 +1,3 @@
-$DiscovergyUri = "https://api.discovergy.com/public/v1"
-
-# Oauth1
-
 # Prerequisite:
 # OAuth1:
 #    https://www.powershellgallery.com/packages/PSAuth/
@@ -10,8 +6,16 @@ $DiscovergyUri = "https://api.discovergy.com/public/v1"
 #      => Get-PSAuthorizationString: Create an OAuth 1.0 Authorization string for use in an HTTP request.
 #      => Invoke-PSAuthRestMethod: Execute Invoke-RestMethod including an OAuth 1.0 authorization header.
 
+# user editable variables
 $discovergyuser = 'your@email.com'
 $discovergypass = 'YourP@ssW0rd'
+$start = "01/02/2021 00:00:00"
+$end = "28/02/2021 23:00:00"
+$filename = '.\discovergy-2021-02.csv'
+
+
+$DiscovergyUri = "https://api.discovergy.com/public/v1"
+
 
 # OAuth1 Step 1
 function Get-DiscovergyOauth1ConsumerToken {
@@ -312,7 +316,7 @@ function Get-DiscovergyHourlyPowerData {
 	Write-Verbose "Input OAuth Token Key: $accesskey"
 	Write-Verbose "Input OAuth Token Secret: $accesssecret"
 	Write-Verbose "Meter ID: $meterid"
-	Write-Verbose "Sart date/time: $starttimestr"
+	Write-Verbose "Start date/time: $starttimestr"
 	Write-Verbose "End date/time: $endtimestr"
 
 	$Method = 'GET'
@@ -320,7 +324,7 @@ function Get-DiscovergyHourlyPowerData {
 	# Begin time of interval to return readings for, as a UNIX millisecond timestamp
 	$unixstart = get-date -date "01/01/1970"
 	$start = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $starttimestr)).TotalMilliseconds
-	$ende = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $endtimestr)).TotalMilliseconds
+	$end = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $endtimestr)).TotalMilliseconds
 	$resolution = 'one_hour'
 	# Power = Milliwatt
 	$field = 'power'
@@ -336,12 +340,13 @@ function Get-DiscovergyHourlyPowerData {
 	# one_year			100 years
 	$maxrange = 93
 	$range = (New-TimeSpan -Start (Get-Date $starttimestr) -End (Get-Date $endtimestr)).TotalDays
-	Write-Verbose "Selected time range is $range days. API limit is $maxrange"
+	$range = [math]::ceiling($range)
+	Write-Verbose "Selected time range is $range days. API limit is $maxrange days for a single request."
 	if ($range -gt $maxrange) {
-		Write-Error "Selected time range $range above API limit of $maxrange"
+		Write-Error "Selected time range is $range days. Tbhis is above API limit of $maxrange days for a single request."
 	}
 
-	$Uri = "$endpointUri/readings?meterId=$meterid&fields=$field&from=$start&to=$ende&resolution=$resolution&disaggregation=false&each=false"
+	$Uri = "$endpointUri/readings?meterId=$meterid&fields=$field&from=$start&to=$end&resolution=$resolution&disaggregation=false&each=false"
 
 	$RestParams = @{
 		"URI" = "$Uri"
@@ -395,9 +400,7 @@ $meterid = Get-DiscovergyMeters $DiscovergyUri $consumertoken.key $consumertoken
 
 #$fieldnames = Get-DiscovergyFieldNames $DiscovergyUri $consumertoken.key $consumertoken.secret $accesstoken.key $accesstoken.secret $meterid
 
-$start = "01/02/2021 00:00:00"
-$end = "28/02/2021 23:00:00"
 $powerdata = Get-DiscovergyHourlyPowerData $DiscovergyUri $consumertoken.key $consumertoken.secret $accesstoken.key $accesstoken.secret $meterid $start $end
 
-$powerdata | export-csv -path '.\discovergy-2021-02.csv'
+$powerdata | export-csv -path $filename
 
