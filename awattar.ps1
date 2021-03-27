@@ -3,52 +3,78 @@
 # currently no token required
 # return values excluding tax
 #
-# Important: seems to run on UTC
-$unixstart = (get-date -date "01/01/1970").AddHours(1)
-$start = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date "01/02/2021 00:00:00")).TotalMilliseconds
-$ende = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date "01/03/2021 00:00:00")).TotalMilliseconds
+# Important: Awattar seems to run on UTC. Requires time offset.
 
-write-host "Get Costs..." -ForeGroundColor GREEN
+# user editable variables
+$start = "01/12/2020 00:00:00"
+$end = "01/01/2021 00:00:00"
+$filename = '.\awattar-upd-2020-12.csv'
+#$start = "27/03/2021 00:00:00"
+#$end = "28/03/2021 00:00:00"
+#$filename = '.\awattar-2021-03-27.csv'
 
-$Params = @{
-	"URI" = "https://api.awattar.de/v1/marketdata?start=$start&end=$ende"
-	"Method" = 'GET'
-}
-$response = Invoke-WebRequest @Params
-#$response
 
-$costs = ($response.Content | convertfrom-json ).data
-#$costs
+$AwattarUri = "https://api.awattar.de/v1"
 
-foreach ($entry in $costs) {
-	$zeit = $unixstart.AddMilliseconds($entry.start_timestamp)
-	$zeit2 = $unixstart.AddMilliseconds($entry.end_timestamp)
-	# Note: Default §entry.unit = Eur/MWh
-	#       converted to ct/kWh
-	$price = $entry.marketprice / 1000 * 100
-	# add Netznutzung Umlagen Abgaben Stuern Spotaufpreis tax (19%)
-	$endprice = 20.33 + (($price + 0.25) * 1.19)
-	write-host ("Zeitbereich {0} - {1}: {2:n2}  Gesamtpreis: {3:n2}" -f $zeit,$zeit2,$price,$endprice)
-}
+function Get-AwattarMarketdata {
 
-write-host "Export data..." -ForeGroundColor GREEN
+	param (
+		$endpointUri,
+		$starttimestr,
+		$endtimestr
+	)
 
-$exdata = @()
+	Write-Verbose "Get hourly power cost..."
 
-foreach ($entry in $costs) {
-	$zeit = $unixstart.AddMilliseconds($entry.start_timestamp)
-	$zeitstr = ("{0}" -f $zeit)
-	# EUR/MWh -> ct/kWh
-	$price = $entry.marketprice / 1000 * 100
-	# add Netznutzung Umlagen Abgaben Stuern Spotaufpreis tax (19%)
-	$endprice = 20.33 + (($price + 0.25) * 1.19)
-	$exdata += [PSCustomObject]@{
-		'Zeitbereich' = $zeitstr
-		'Preis ct/kWh' = $endprice
+	Write-Verbose "Input Uri: $endpointUri"
+	Write-Verbose "Input Start date/time: $starttimestr"
+	Write-Verbose "Input End date/time: $endtimestr"
+	
+	# add one hour winter time Germany
+	$unixstart = (get-date -date "01/01/1970").AddHours(1)
+	$startms = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $starttimestr)).TotalMilliseconds
+	$endms = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $endtimestr)).TotalMilliseconds
+	
+	$WebParams = @{
+		"URI" = "$endpointUri/marketdata?start=$startms&end=$endms"
+		"Method" = 'GET'
 	}
+	$response = Invoke-WebRequest @WebParams
+	
+	$costs = ($response.Content | convertfrom-json ).data
+
+	$data = @()
+	
+	foreach ($entry in $costs) {
+		Write-Verbose "  $entry"
+		$datetime = $unixstart.AddMilliseconds($entry.start_timestamp)
+		$datetimestr = ("{0}" -f $datetime)
+		# convert EUR/MWh to ct/kWh
+		# Marketprice return values excl. tax (compared with https://www.awattar.de/tariffs/hourly)
+		$price = $entry.marketprice / 1000 * 100
+		# add Netznutzung Umlagen Abgaben Stuern Spotaufpreis tax (19%)
+		# the 0.250 cent/kWh already includes tax (mentioned https://www.awattar.de/tariffs/hourly)
+		$endprice = 20.33 + 0.25 + ($price * 1.19)
+		$data += [PSCustomObject]@{
+			'Range_1h' = $datetimestr
+			'marketprice_raw' = $entry.marketprice
+			'Total_Cost_ct_each_kWh' = $endprice
+		}
+	}
+
+	return $data
 }
 
-$exdata
 
-$exdata | export-csv -path '.\awattar-data.csv'
+#
+# Main
+#
+
+$VerbosePreference = "Continue"
+$ErrorActionPreference = "Stop"
+
+
+$costdata = Get-AwattarMarketdata $AwattarUri $start $end
+
+$costdata | export-csv -path $filename
 
