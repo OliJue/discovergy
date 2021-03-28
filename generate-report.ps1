@@ -23,11 +23,11 @@
 # user editable variables
 $discovergyuser = 'your@email.com'
 $discovergypass = 'YourP@ssW0rd'
-$start = "01/02/2021 00:00:00"
-$end = "01/03/2021 00:00:00"
-$filename = '.\report-2021-02-01.csv'
-$VerbosePreference = "Continue"
-
+$start = "01/10/2020 00:00:00"
+$end = "01/11/2020 00:00:00"
+$filename = '.\report-2020-10.csv'
+$price_comparison_ct_kwh = 27.06
+#$VerbosePreference = "Continue"
 
 $HeaderConsumptionRange = 'Measure_Range_1h'
 $HeaderConsumptionUsage = 'Power_used_Wh'
@@ -501,6 +501,34 @@ function Invoke-MergePowerData {
 	return $data
 }
 
+function Invoke-PowerSummary {
+
+	param (
+		$report,
+		$staticprice
+	)
+
+	Write-Verbose "Calculate hourly summary and compare to static price..."
+
+	$totalpower = 0
+	$totalcost = 0
+
+	foreach ($entry in $report) {
+		$totalpower += $entry.$HeaderConsumptionUsage
+		$totalcost += $entry.$HeaderReportCost
+	}
+	# Convert from Wh to kWh
+	$totalpower = $totalpower / 1000
+
+	$totalcostcomparison = $totalpower * $staticprice / 100
+
+	Write-Host ("Sum power consumed: {0:n2} kWh" -f $totalpower)
+	Write-Host ("Sum Cost {0:n2} EUR" -f $totalcost)
+	Write-Host ("Alternate price with fixed rate: {0:n2} EUR" -f $totalcostcomparison)
+	Write-Host ("Savings {0:n2} EUR" -f ($totalcostcomparison - $totalcost))
+}
+
+
 
 #
 # Main
@@ -526,5 +554,7 @@ $costdata | Export-Csv -Path .\temp-costdata.csv
 
 $report = Invoke-MergePowerData $powerdata $costdata
 $report | Export-Csv -Path $filename
+
+Invoke-PowerSummary $report $price_comparison_ct_kwh
 
 #$report
