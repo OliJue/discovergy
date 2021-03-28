@@ -6,12 +6,12 @@
 # Important: Awattar seems to run on UTC. Requires time offset.
 
 # user editable variables
-$start = "01/12/2020 00:00:00"
-$end = "01/01/2021 00:00:00"
-$filename = '.\awattar-upd-2020-12.csv'
-#$start = "27/03/2021 00:00:00"
-#$end = "28/03/2021 00:00:00"
-#$filename = '.\awattar-2021-03-27.csv'
+#$start = "01/12/2020 00:00:00"
+#$end = "01/01/2021 00:00:00"
+#$filename = '.\awattar-upd-2020-12.csv'
+$start = "29/03/2021 00:00:00"
+$end = "30/03/2021 00:00:00"
+$filename = '.\awattar-2021-03-29a.csv'
 
 
 $AwattarUri = "https://api.awattar.de/v1"
@@ -31,7 +31,13 @@ function Get-AwattarMarketdata {
 	Write-Verbose "Input End date/time: $endtimestr"
 	
 	# add one hour winter time Germany
-	$unixstart = (get-date -date "01/01/1970").AddHours(1)
+	# add two hours summer time Germany
+	if ((get-date $start).IsDaylightSavingTime() -eq $true	) {
+		$offset = 2
+	} else {
+		$offset = 1
+	}
+	$unixstart = (get-date -date "01/01/1970").AddHours($offset)
 	$startms = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $starttimestr)).TotalMilliseconds
 	$endms = [int64] (New-TimeSpan -Start $unixstart -End (Get-Date $endtimestr)).TotalMilliseconds
 	
