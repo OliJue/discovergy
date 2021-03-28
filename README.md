@@ -9,13 +9,13 @@ Even if the Discovergy API is somehow documented, it took me some hours to succe
 
 As of now the provided code has any error handling, everthing is hard coded. I am going to improve this stuff over the next days.
 
-# Usage
+## Usage
 
 Install PSAuth
 Modify user editable variables within script
 Start .\generate_report.ps1
 
-# Known Issues
+## Known Issues
 
 No error handling
 No workaround for Discovergy API limit of max. 91 days for a single request
