@@ -21,7 +21,9 @@ Start .\generate_report.ps1
 ## Known Issues
 
 No error handling
+
 No workaround for Discovergy API limit of max. 91 days for a single request
+
 User input needs modification of the script(s)
 
 ## Environment
