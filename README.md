@@ -12,11 +12,19 @@ As of now the provided code has any error handling, everthing is hard coded. I a
 ## Usage
 
 Install PSAuth
+
 Modify user editable variables within script
+
 Start .\generate_report.ps1
+
 
 ## Known Issues
 
 No error handling
 No workaround for Discovergy API limit of max. 91 days for a single request
 User input needs modification of the script(s)
+
+## Environment
+
+PSAuth 0.1.4.80
+Powershell 5.1.19041.868
